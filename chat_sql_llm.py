@@ -9,6 +9,7 @@ from langchain_openai import ChatOpenAI
 import streamlit as st
 
 
+load_dotenv()
 
 def init_database(user: str, password: str, host: str, port: str, database: str) -> SQLDatabase:
   db_uri = f"mysql+mysqlconnector://{user}:{password}@{host}:{port}/{database}"
@@ -18,7 +19,8 @@ def init_database(user: str, password: str, host: str, port: str, database: str)
 def get_sql_chain(db):
   template = """
     You are a data analyst at a company. You are interacting with a user who is asking you questions about the company's database.
-    Based on the table schema below, write a SQL query that would answer the user's question. Take the conversation history into account.
+    Based on the table schema below, write a SQL query that would answer the user's question. Make sure you only write queries that can read the tables like show, describe or select, do not write queries that can modify, update or add to the table. 
+    Take the conversation history into account.
     
     <SCHEMA>{schema}</SCHEMA>
     
@@ -41,8 +43,8 @@ def get_sql_chain(db):
   prompt = ChatPromptTemplate.from_template(template)
   
   #llm = ChatOpenAI(model="gpt-4-0125-preview")
-  llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
   #llm = ChatGroq(model="mixtral-8x7b-32768", temperature=0)
+  llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
   
   def get_schema(_):
     return db.get_table_info()
@@ -72,10 +74,17 @@ def get_response(user_query: str, db: SQLDatabase, chat_history: list):
 
   def run_query(query):
     query_check = query.split()
-    if query_check[0] == 'select' or 'SELECT':
+    accepted_queries = {'select', 'show', 'describe', 'SELECT', 'SHOW', 'DESCRIBE'}
+    if query_check[0] in accepted_queries:
         print("Query to execute :", query)
         execute_query = db.run(query)
+        #print(execute_query)
         print('=======================================================')
+    elif query_check[0] == 'N/A':
+       execute_query = 'Please enter a valid question relating to the SQL database.'
+       print('------------------------------------')
+    else:
+       execute_query = 'Unsuported SQL Query operation. Only select, show and decribe are supported.'
     return execute_query
   
   #llm = ChatOpenAI(model="gpt-4-0125-preview")
@@ -104,7 +113,6 @@ if "chat_history" not in st.session_state:
       AIMessage(content="Hello! I'm a SQL assistant. Ask me anything about your database!"),
     ]
 
-load_dotenv()
 
 st.set_page_config(page_title="Chat with MySQL", page_icon=":speech_balloon:")
 
@@ -117,8 +125,8 @@ with st.sidebar:
     st.text_input("Host", value="localhost", key="Host")
     st.text_input("Port", value="3306", key="Port")
     st.text_input("User", value="root", key="User")
-    st.text_input("Password", type="password", value="Adnan_1998", key="Password")
-    st.text_input("Database", value="Chinook", key="Database")
+    st.text_input("Password", type="password", value="<password_placeholder>", key="Password")
+    st.text_input("Database", value="chinook", key="Database")
     
     if st.button("Connect"):
         with st.spinner("Connecting to database..."):
